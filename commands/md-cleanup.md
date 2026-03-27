@@ -82,7 +82,7 @@ Commands for counting:
 ```bash
 wc -l ~/telegram-claude-bot/CLAUDE.md
 cat ~/.claude/hookify.*.local.md | wc -c
-wc -l ~/.claude/projects/-Users-bernard/memory/MEMORY.md
+ls ~/.claude/projects/*/memory/MEMORY.md | head -1 | xargs wc -l
 for f in $(find ~/.claude/skills -name "SKILL.md"); do awk '/^---/{n++; next} n==1{print}' "$f"; done | wc -c
 ```
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """PostToolUse hook: auto pip install on VPS after requirements.txt edit."""
 import sys
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))

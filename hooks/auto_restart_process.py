@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """PostToolUse hook: auto-restart process after editing its source file."""
 import json
 import os
@@ -29,15 +30,18 @@ RESTART_MAP = {
 
 
 def _load_vps():
-    env_path = Path.home() / "telegram-claude-bot" / ".env"
-    user = "bernard"
-    host = "157.180.28.14"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if line.startswith("VPS_USER="):
-                user = line.split("=", 1)[1].strip()
-            elif line.startswith("VPS_HOST="):
-                host = line.split("=", 1)[1].strip()
+    import os
+    dotenv_path = os.environ.get("DOTENV_PATH", "")
+    user = ""
+    host = ""
+    if dotenv_path:
+        env_path = Path(dotenv_path)
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("VPS_USER="):
+                    user = line.split("=", 1)[1].strip()
+                elif line.startswith("VPS_HOST="):
+                    host = line.split("=", 1)[1].strip()
     return f"{user}@{host}"
 
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """PostToolUse hook: after git push to public repos → remind to check README/description sync."""
 import json
 import re

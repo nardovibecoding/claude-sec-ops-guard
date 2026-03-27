@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """PreToolUse hook: block destructive ops (rm -rf, force push, hard reset) + VPS direct access (scp, manual bot start, kill start_all)."""
 import re
 import sys
@@ -51,7 +52,7 @@ def check_and_deny(tool_name, tool_input, input_data):
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny"
         },
-        "systemMessage": f"**BLOCKED: Destructive operation.** `{cmd[:80]}` — ask Bernard for confirmation."
+        "systemMessage": f"**BLOCKED: Destructive operation.** `{cmd[:80]}` — requires user confirmation."
     }
 
 

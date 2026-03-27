@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """UserPromptSubmit hook: auto-trigger checkpoint at 20% context intervals."""
 import json
 import sys

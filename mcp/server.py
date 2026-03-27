@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """ops-guard MCP server — stateful queries for Claude Code enforcement."""
 
+import glob
 import os
 import re
 import subprocess
@@ -88,15 +90,17 @@ def config_diff() -> dict:
     env = load_env()
     vps_ssh = f"{env['VPS_USER']}@{env['VPS_HOST']}"
 
-    mac_env_path = Path.home() / "telegram-claude-bot" / ".env"
+    dotenv_path = os.environ.get("DOTENV_PATH", "")
+    mac_env_path = Path(dotenv_path) if dotenv_path else None
     mac_keys = set()
-    if mac_env_path.exists():
+    if mac_env_path and mac_env_path.exists():
         for line in mac_env_path.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 mac_keys.add(line.split("=", 1)[0].strip())
 
-    ok, vps_env_text = ssh_cmd(vps_ssh, "cat ~/telegram-claude-bot/.env 2>/dev/null")
+    vps_dotenv = os.environ.get("VPS_DOTENV_PATH", "")
+    ok, vps_env_text = ssh_cmd(vps_ssh, f"cat {vps_dotenv} 2>/dev/null" if vps_dotenv else "echo ''")
     vps_keys = set()
     if ok:
         for line in vps_env_text.splitlines():
@@ -174,9 +178,13 @@ def context_budget() -> dict:
     else:
         results["hookify_rules"] = {"files": 0, "chars": 0, "est_tokens": 0}
 
-    # MEMORY.md
-    memory_md = Path.home() / ".claude/projects/-Users-bernard/memory/MEMORY.md"
-    if memory_md.exists():
+    # MEMORY.md — discover active project memory dir dynamically
+    memory_md = None
+    project_dirs = glob.glob(str(Path.home() / ".claude/projects/*/memory/MEMORY.md"))
+    if project_dirs:
+        memory_dir = Path(project_dirs[0]).parent
+        memory_md = memory_dir / "MEMORY.md"
+    if memory_md and memory_md.exists():
         lines = len(memory_md.read_text().splitlines())
         results["memory_index"] = {"lines": lines, "est_tokens": int(lines * 8)}
 
@@ -581,10 +589,19 @@ def session_transfer(direction: str, summary: str = "", session_id: str = "") ->
         if not summary or not session_id:
             return {"error": "provide summary and session_id for transfer out"}
 
-        # Write pending file to VPS
+        # Write pending file to VPS (use env var for project path or fall back to first found)
+        vps_project_path = os.environ.get("VPS_CLAUDE_PROJECT_PATH", "")
+        if not vps_project_path:
+            _, found = ssh_cmd(vps_ssh,
+                "ls ~/.claude/projects/*/memory/MEMORY.md 2>/dev/null | head -1",
+                timeout=5)
+            if found.strip():
+                vps_project_path = str(Path(found.strip()).parent)
+            else:
+                vps_project_path = "~/.claude/projects/default/memory"
         ok, _ = ssh_cmd(vps_ssh,
-            f"mkdir -p ~/.claude/projects/-home-bernard/memory && "
-            f"echo '{session_id}' > ~/.claude/projects/-home-bernard/memory/pending_resume.txt",
+            f"mkdir -p {vps_project_path} && "
+            f"echo '{session_id}' > {vps_project_path}/pending_resume.txt",
             timeout=10
         )
 
@@ -609,9 +626,18 @@ def session_transfer(direction: str, summary: str = "", session_id: str = "") ->
         return {"transferred": True, "direction": "out", "session_id": session_id}
 
     elif direction == "in":
-        # Read pending session from VPS
+        # Read pending session from VPS (discover project path dynamically)
+        vps_project_path = os.environ.get("VPS_CLAUDE_PROJECT_PATH", "")
+        if not vps_project_path:
+            _, found = ssh_cmd(vps_ssh,
+                "ls ~/.claude/projects/*/memory/MEMORY.md 2>/dev/null | head -1",
+                timeout=5)
+            if found.strip():
+                vps_project_path = str(Path(found.strip()).parent)
+            else:
+                vps_project_path = "~/.claude/projects/default/memory"
         ok, pending = ssh_cmd(vps_ssh,
-            "cat ~/.claude/projects/-home-bernard/memory/pending_resume.txt 2>/dev/null")
+            f"cat {vps_project_path}/pending_resume.txt 2>/dev/null")
         if ok and pending.strip():
             return {"direction": "in", "session_id": pending.strip(), "ready": True}
         return {"direction": "in", "ready": False, "error": "no pending session"}
@@ -769,14 +795,16 @@ def sync_status() -> dict:
         vps["mac_head"] = mac_head
         vps["git_synced"] = vps_head.strip() == mac_head
         # .env key diff
-        mac_env = Path.home() / "telegram-claude-bot" / ".env"
+        dotenv_path = os.environ.get("DOTENV_PATH", "")
+        mac_env = Path(dotenv_path) if dotenv_path else None
         mac_keys = set()
-        if mac_env.exists():
+        if mac_env and mac_env.exists():
             for line in mac_env.read_text().splitlines():
                 l = line.strip()
                 if l and not l.startswith("#") and "=" in l:
                     mac_keys.add(l.split("=", 1)[0].strip())
-        _, vps_env_text = ssh_cmd(vps_ssh, "cat ~/telegram-claude-bot/.env 2>/dev/null")
+        vps_dotenv = os.environ.get("VPS_DOTENV_PATH", "")
+        _, vps_env_text = ssh_cmd(vps_ssh, f"cat {vps_dotenv} 2>/dev/null" if vps_dotenv else "echo ''")
         vps_keys = set()
         for line in vps_env_text.splitlines():
             l = line.strip()

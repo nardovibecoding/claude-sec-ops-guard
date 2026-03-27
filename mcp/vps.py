@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """VPS SSH utilities with connection reuse."""
 
 import os
@@ -6,13 +7,16 @@ from pathlib import Path
 
 
 def load_env() -> dict:
-    """Load .env from telegram-claude-bot (single source of truth)."""
+    """Load .env from DOTENV_PATH env var (single source of truth)."""
     env = {
-        "VPS_HOST": "157.180.28.14",
-        "VPS_USER": "bernard",
+        "VPS_HOST": "",
+        "VPS_USER": "",
         "VPS_CLIPBOARD_PORT": "8888",
     }
-    env_path = Path.home() / "telegram-claude-bot" / ".env"
+    dotenv_path = os.environ.get("DOTENV_PATH", "")
+    if not dotenv_path:
+        return env
+    env_path = Path(dotenv_path)
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             line = line.strip()

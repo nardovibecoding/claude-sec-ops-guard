@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """Improvement pattern database for post_task_check."""
 
 import time

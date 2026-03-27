@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 """Shared library — pure Python functions usable by both MCP server and admin bot.
 
 No MCP dependency. Import freely from any Python project:
