@@ -10,7 +10,7 @@ claude plugins install nardovibecoding/claude-security-guard
 
 **The most complete enforcement + security layer for Claude Code — hooks that block, tools that know, skills that audit.**
 
-[![hooks](https://img.shields.io/badge/hooks-13-orange?style=for-the-badge)](hooks/)
+[![hooks](https://img.shields.io/badge/hooks-12-orange?style=for-the-badge)](hooks/)
 [![mcp-tools](https://img.shields.io/badge/mcp--tools-27-blue?style=for-the-badge)](mcp/)
 [![commands](https://img.shields.io/badge/commands-2-green?style=for-the-badge)](commands/)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-red?style=for-the-badge)](LICENSE)
@@ -30,8 +30,6 @@ claude-security-guard runs a multilayer defense stack directly inside Claude Cod
 - **File upload safety** — MIME mismatch detection, double-extension attacks, ClamAV integration
 - **Dependency auditing** — typosquatting detection against known malicious package names
 - **Exfiltration detection** — flags POST requests to unknown domains and file-to-HTTP patterns
-- **Pre-publish audit** — 12-point gate before any `gh repo --visibility public` command runs
-
 Every security check runs as a hook (zero tokens) or an MCP tool call (one tool call). No instructions burned in context.
 
 ---
@@ -80,7 +78,6 @@ Hooks fire automatically on tool events. Zero tokens consumed.
 | Hook | Event | What it does |
 |------|-------|-------------|
 | `guard_safety` | PreToolUse (Bash) | Blocks `rm -rf`, force push, hard reset, unauthorized VPS kills |
-| `auto_pre_publish` | PreToolUse (Bash) | 12-point audit gate before any repo goes public: secrets, license, `.gitignore`, artifacts, binaries, NOTICE |
 
 ### Ops Automation
 
