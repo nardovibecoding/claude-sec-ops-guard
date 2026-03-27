@@ -16,6 +16,8 @@ claude plugins install nardovibecoding/claude-security-guard
 [![license](https://img.shields.io/badge/license-AGPL--3.0-red?style=for-the-badge)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-macOS-lightgrey?style=for-the-badge)](#)
 
+<img src="demo.gif" alt="Security Guard blocking force-push and running pre-publish audit" width="700">
+
 </div>
 
 ---
