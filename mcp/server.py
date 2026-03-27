@@ -250,6 +250,19 @@ def session_log(action: str = "", detail: str = "", query: bool = False) -> dict
     return _lib.session_log(action, detail, query)
 
 
+# --- Tool 7b: audit_query (delegates to lib, P1 #6) ---
+@mcp.tool()
+def audit_query(date: str = "", action_filter: str = "", limit: int = 50) -> dict:
+    """Query the persistent audit log. Returns recent session actions from JSONL files.
+
+    Args:
+        date: filter by date (YYYY-MM-DD). Empty = all recent.
+        action_filter: filter by action type substring (e.g. "git_push", "file_edit").
+        limit: max entries to return (default 50).
+    """
+    return _lib.audit_query(date, action_filter, limit)
+
+
 # --- Tool 8: content_capture (delegates to lib) ---
 @mcp.tool()
 def content_capture(moment: str, category: str = "insight") -> dict:

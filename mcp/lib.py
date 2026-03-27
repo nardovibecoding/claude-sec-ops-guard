@@ -138,6 +138,66 @@ Pick up from here next session. Key state:
     return {"saved": str(checkpoint_path), "actions_logged": len(actions)}
 
 
+# --- Persistent audit log (P1 #6) ---
+AUDIT_DIR = Path.home() / ".claude" / "audit"
+_SESSION_ID = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def _audit_append(action: str, detail: str):
+    """Append a JSONL entry to the daily audit file."""
+    import json
+    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    audit_file = AUDIT_DIR / f"{date_str}.jsonl"
+    entry = json.dumps({
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "detail": detail,
+        "session": _SESSION_ID
+    })
+    with open(audit_file, "a") as f:
+        f.write(entry + "\n")
+
+
+def audit_query(date: str = "", action_filter: str = "", limit: int = 50) -> dict:
+    """Read audit log entries with optional filters.
+
+    Args:
+        date: filter by date (YYYY-MM-DD). Empty = today.
+        action_filter: filter by action type substring.
+        limit: max entries to return.
+    """
+    import json
+    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+
+    if date:
+        files = [AUDIT_DIR / f"{date}.jsonl"]
+    else:
+        files = sorted(AUDIT_DIR.glob("*.jsonl"), reverse=True)
+
+    entries = []
+    for f in files:
+        if not f.exists():
+            continue
+        for line in f.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if action_filter and action_filter not in entry.get("action", ""):
+                continue
+            entries.append(entry)
+            if len(entries) >= limit:
+                break
+        if len(entries) >= limit:
+            break
+
+    return {"entries": entries, "total": len(entries)}
+
+
 # --- Session log ---
 def session_log(action: str = "", detail: str = "", query: bool = False) -> dict:
     """Log a session action or query the log.
@@ -156,6 +216,8 @@ def session_log(action: str = "", detail: str = "", query: bool = False) -> dict
             "detail": detail,
             "timestamp": time.time()
         })
+        # Also persist to audit log (P1 #6)
+        _audit_append(action, detail)
         return {"logged": True, "total": len(session_actions)}
 
     return {"error": "provide action or set query=True"}

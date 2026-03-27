@@ -3,17 +3,32 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Write|Edit|Read",
         "hooks": [
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_safety.py",
             "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/canary_guard.py",
+            "timeout": 3000
           }
         ]
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Bash|Read|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/auto_scan_output.py",
+            "timeout": 3000
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
