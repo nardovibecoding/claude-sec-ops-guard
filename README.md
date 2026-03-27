@@ -1,8 +1,8 @@
-# claude-ops-guard — Claude Code Operations Plugin
+# claude-security-guard — Claude Code Operations + Security Plugin
 
-![hooks](https://img.shields.io/badge/hooks-12-orange) ![mcp-tools](https://img.shields.io/badge/mcp--tools-20-blue) ![commands](https://img.shields.io/badge/commands-2-green) ![license](https://img.shields.io/badge/license-AGPL--3.0-red)
+![hooks](https://img.shields.io/badge/hooks-13-orange) ![mcp-tools](https://img.shields.io/badge/mcp--tools-27-blue) ![commands](https://img.shields.io/badge/commands-2-green) ![license](https://img.shields.io/badge/license-AGPL--3.0-red)
 
-**The first Claude Code plugin that combines Python hooks, MCP tools, and skill commands into a unified operations layer.**
+**Claude Code plugin — Python hooks, MCP tools, and skill commands for enforcement, ops, and security.**
 
 Enforce rules. Query live state. Automate ops. All without a single line burned on instructing Claude in context.
 
@@ -42,6 +42,7 @@ Hooks run silently on every relevant Claude Code action. Zero tokens consumed.
 | `auto_memory_index` | PostToolUse (Edit/Write) | Checks if new memory file is indexed in `MEMORY.md` |
 | `auto_context_checkpoint` | UserPromptSubmit | Auto-triggers checkpoint at 20% context intervals |
 | `auto_content_remind` | Stop | Before session ends → prompts to save content-worthy moments |
+| `auto_pre_publish` | PreToolUse (Bash) | Blocks `gh repo --visibility public` until 12-point audit passes: secrets, license, .gitignore, artifacts, binaries, NOTICE |
 
 ### MCP Tools (20)
 
@@ -69,6 +70,13 @@ Tools give Claude stateful, live answers. No hallucinating from memory.
 | `indicator_switch` | Switch voice indicator between menubar and floating dot |
 | `sync_status` | Full sync state: GitHub ↔ Mac ↔ VPS ↔ templates in one call |
 | `voice_control` | Lock/unlock voice, mute/unmute TTS, check voice system status |
+| `content_sanitize` | Scan text for 30+ prompt injection patterns (EN/CN/JP) |
+| `url_check` | SSRF protection — block private IPs, suspicious TLDs, homograph attacks |
+| `file_scan` | MIME mismatch, double extensions, suspicious code patterns, ClamAV |
+| `dependency_audit` | Typosquatting detection, known malicious package database |
+| `secret_leak_scan` | Scan files/dirs for API keys, tokens, passwords, private keys |
+| `exfil_detect` | Detect data exfiltration — POST to unknown domains, file→HTTP patterns |
+| `image_metadata` | Image type verification, embedded scripts, GPS data, EXIF analysis |
 
 ### Skill Commands (2)
 
@@ -115,7 +123,7 @@ Hooks are muscle: they fire automatically and enforce without asking. MCP is the
 ## Install
 
 ```bash
-claude plugins install nardovibecoding/claude-ops-guard
+claude plugins install nardovibecoding/claude-security-guard
 ```
 
 The plugin registers hooks, starts the MCP server, and makes the skill commands available — one command.

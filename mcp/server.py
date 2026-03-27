@@ -899,6 +899,226 @@ def voice_control(action: str = "status") -> dict:
     return {"error": f"unknown action: {action}"}
 
 
+# ============================================================
+# SECURITY TOOLS (merged from security-shield-mcp)
+# ============================================================
+
+# Import sanitizer (local copy of claude-sanitizer)
+try:
+    from sanitizer import sanitize_external_content, _is_safe_url, INJECTION_PATTERNS, _COMPILED
+    _sanitizer_ok = True
+except ImportError:
+    _sanitizer_ok = False
+
+
+@mcp.tool()
+def content_sanitize(text: str) -> dict:
+    """Scan text for prompt injection patterns. Use on any crawled/external content before processing."""
+    if not _sanitizer_ok:
+        return {"error": "sanitizer.py not found"}
+    original = text
+    cleaned = sanitize_external_content(text)
+    was_modified = cleaned != original
+    blocked_count = cleaned.count("[BLOCKED]")
+    matched = []
+    for i, pattern in enumerate(_COMPILED):
+        if pattern.search(original):
+            matched.append(INJECTION_PATTERNS[i][:60])
+    return {
+        "safe": not was_modified,
+        "blocked_count": blocked_count,
+        "matched_patterns": matched[:10],
+        "cleaned_preview": cleaned[:500] if was_modified else "(clean)",
+    }
+
+
+@mcp.tool()
+def url_check(url: str) -> dict:
+    """Check if a URL is safe to fetch — blocks SSRF, private IPs, suspicious domains."""
+    if not _sanitizer_ok:
+        return {"error": "sanitizer.py not found"}
+    from urllib.parse import urlparse
+    import ipaddress
+    safe = _is_safe_url(url)
+    parsed = urlparse(url)
+    warnings = []
+    suspicious_tlds = {'.tk', '.ml', '.ga', '.cf', '.gq', '.buzz', '.top', '.xyz', '.click'}
+    if parsed.hostname:
+        for tld in suspicious_tlds:
+            if parsed.hostname.endswith(tld):
+                warnings.append(f"suspicious TLD: {tld}")
+    try:
+        ipaddress.ip_address(parsed.hostname or "")
+        warnings.append("IP-only URL")
+    except ValueError:
+        pass
+    if len(url) > 2000:
+        warnings.append(f"long URL ({len(url)} chars)")
+    if parsed.hostname and any(ord(c) > 127 for c in parsed.hostname):
+        warnings.append("non-ASCII hostname (homograph?)")
+    return {"url": url, "safe": safe and not warnings, "ssrf_safe": safe, "warnings": warnings}
+
+
+@mcp.tool()
+def file_scan(path: str) -> dict:
+    """Scan a file for security issues — MIME mismatch, double extensions, suspicious code, ClamAV."""
+    p = Path(path)
+    if not p.exists():
+        return {"error": f"not found: {path}"}
+    issues = []
+    stat = p.stat()
+    size_mb = round(stat.st_size / (1024 * 1024), 2)
+    if size_mb > 100:
+        issues.append(f"large: {size_mb}MB")
+    if len(p.suffixes) > 1:
+        dangerous = {'.exe', '.sh', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.py'}
+        if any(s in dangerous for s in p.suffixes):
+            issues.append(f"double extension: {''.join(p.suffixes)}")
+    script_exts = {'.py', '.sh', '.js', '.rb', '.pl', '.bat', '.cmd', '.ps1'}
+    if p.suffix in script_exts:
+        try:
+            content = p.read_text(errors='replace')[:10000]
+            sus = [
+                (r'eval\s*\(', "eval()"), (r'exec\s*\(', "exec()"),
+                (r'subprocess.*shell\s*=\s*True', "shell=True"),
+                (r'os\.system\s*\(', "os.system()"), (r'__import__\s*\(', "dynamic import"),
+                (r'curl.*\|\s*sh', "curl|sh"), (r'base64.*decode', "base64 decode"),
+                (r'reverse\s*shell|bind\s*shell', "shell payload"),
+            ]
+            for pat, desc in sus:
+                if re.search(pat, content, re.IGNORECASE):
+                    issues.append(desc)
+        except Exception:
+            pass
+    if subprocess.run(["which", "clamdscan"], capture_output=True).returncode == 0:
+        r = subprocess.run(["clamdscan", "--no-summary", path], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            issues.append(f"ClamAV: {r.stdout.strip()}")
+    return {"path": path, "size_mb": size_mb, "issues": issues, "safe": not issues}
+
+
+@mcp.tool()
+def dependency_audit(package: str, manager: str = "pip") -> dict:
+    """Check package for supply chain risks — typosquatting, known malicious."""
+    issues = []
+    malicious = {
+        "pip": {"python-dateutils", "python3-dateutil", "jeIlyfish", "python-mongo", "ssh-decorator"},
+        "npm": {"event-stream", "flatmap-stream", "ua-parser-js-malicious"},
+    }
+    if package.lower() in malicious.get(manager, set()):
+        issues.append(f"KNOWN MALICIOUS: {package}")
+    popular = {
+        "pip": ["requests", "numpy", "pandas", "flask", "django", "boto3", "pillow", "cryptography", "pyyaml", "sqlalchemy"],
+        "npm": ["express", "lodash", "react", "axios", "moment", "chalk", "webpack", "typescript", "next"],
+    }
+    for legit in popular.get(manager, []):
+        if package.lower() != legit and _levenshtein(package.lower(), legit) <= 2:
+            issues.append(f"typosquat of '{legit}'")
+    return {"package": package, "manager": manager, "issues": issues, "safe": not issues}
+
+
+@mcp.tool()
+def secret_leak_scan(path: str) -> dict:
+    """Scan file or directory for leaked secrets — API keys, tokens, passwords."""
+    p = Path(path)
+    if not p.exists():
+        return {"error": f"not found: {path}"}
+    _patterns = [
+        (r'sk-[a-zA-Z0-9]{20,}', "OpenAI key"), (r'sk-ant-[a-zA-Z0-9-]{20,}', "Anthropic key"),
+        (r'ghp_[a-zA-Z0-9]{36}', "GitHub PAT"), (r'AKIA[A-Z0-9]{16}', "AWS key"),
+        (r'xoxb-[a-zA-Z0-9-]+', "Slack token"), (r'AIza[a-zA-Z0-9_-]{35}', "Google key"),
+        (r'-----BEGIN.*PRIVATE KEY-----', "Private key"),
+        (r'password\s*[:=]\s*["\'][^"\']{8,}', "Hardcoded password"),
+    ]
+    skip_ext = {'.pyc', '.gif', '.png', '.jpg', '.jpeg', '.ico', '.woff', '.ttf'}
+    skip_dirs = {'.git', 'node_modules', '__pycache__', 'venv', '.venv'}
+    files = [p] if p.is_file() else [
+        f for f in p.rglob("*")
+        if f.is_file() and f.suffix not in skip_ext and not any(sd in f.parts for sd in skip_dirs)
+    ]
+    findings = []
+    for file in files[:100]:
+        try:
+            content = file.read_text(errors='replace')
+        except Exception:
+            continue
+        for pat, desc in _patterns:
+            if re.search(pat, content):
+                findings.append({"file": str(file), "type": desc})
+    return {"path": str(path), "files_scanned": len(files), "findings": findings[:20], "safe": not findings}
+
+
+@mcp.tool()
+def exfil_detect(text: str) -> dict:
+    """Detect data exfiltration attempts in code — HTTP POST to unknown domains, file read+upload patterns."""
+    _patterns = [
+        (r'requests?\.(post|put)\s*\(["\']https?://(?!api\.(telegram|anthropic|openai|github))', "POST to unknown domain"),
+        (r'curl\s+(-X\s+POST\s+)?["\']?https?://(?!api\.)', "curl to unknown"),
+        (r'socket\.connect\s*\(', "raw socket"), (r'ftplib|smtplib', "FTP/SMTP usage"),
+        (r'base64\.b64encode.*requests', "base64→HTTP"), (r'open\(.*\)\.read\(\).*requests\.(post|put)', "file→HTTP"),
+        (r'os\.environ.*requests\.(post|put)', "env→HTTP"),
+    ]
+    findings = []
+    for pat, desc in _patterns:
+        if re.search(pat, text, re.IGNORECASE):
+            findings.append(desc)
+    return {"findings": findings, "safe": not findings}
+
+
+@mcp.tool()
+def image_metadata(path: str) -> dict:
+    """Check image for suspicious metadata, embedded scripts, type mismatch, GPS data."""
+    p = Path(path)
+    if not p.exists():
+        return {"error": f"not found: {path}"}
+    issues = []
+    try:
+        raw = p.read_bytes()
+    except Exception as e:
+        return {"error": str(e)}
+    magic_map = {
+        b'\xff\xd8\xff': 'JPEG', b'\x89PNG': 'PNG',
+        b'GIF87a': 'GIF', b'GIF89a': 'GIF', b'RIFF': 'WEBP',
+    }
+    detected = None
+    for magic, ftype in magic_map.items():
+        if raw.startswith(magic):
+            detected = ftype
+            break
+    ext_map = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.gif': 'GIF', '.webp': 'WEBP'}
+    expected = ext_map.get(p.suffix.lower())
+    if expected and detected and expected != detected:
+        issues.append(f"type mismatch: ext={p.suffix} content={detected}")
+    if not detected:
+        issues.append("not a known image format")
+    for marker in [b'<script', b'<?php', b'#!/bin', b'eval(', b'exec(']:
+        if marker in raw:
+            issues.append(f"embedded code: {marker.decode(errors='replace')}")
+    if detected == 'JPEG':
+        exif_pos = raw.find(b'\xff\xe1')
+        if exif_pos > 0 and exif_pos + 4 < len(raw):
+            exif_size = int.from_bytes(raw[exif_pos+2:exif_pos+4], 'big')
+            if exif_size > 65535:
+                issues.append(f"oversized EXIF: {exif_size}B")
+    if b'GPS' in raw:
+        issues.append("contains GPS location data")
+    return {"path": path, "detected_type": detected, "size_kb": round(len(raw)/1024, 1), "issues": issues, "safe": not issues}
+
+
+def _levenshtein(s1: str, s2: str) -> int:
+    if len(s1) < len(s2):
+        return _levenshtein(s2, s1)
+    if not s2:
+        return len(s1)
+    prev = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(prev[j+1]+1, curr[j]+1, prev[j]+(c1 != c2)))
+        prev = curr
+    return prev[-1]
+
+
 def main():
     mcp.run()
 
