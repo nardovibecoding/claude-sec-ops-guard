@@ -82,6 +82,8 @@ Hooks fire automatically on tool events. Zero tokens consumed.
 | `guard_safety` | PreToolUse (Bash) | Blocks `rm -rf`, force push, hard reset, unauthorized VPS kills. Also: hook self-protection (blocks editing `~/.claude/hooks/`), credential dir read guard (`~/.ssh/`, `~/.aws/`), compound bash decomposition, `--no-verify` detection |
 | `auto_scan_output` | PostToolUse (Read/Bash/WebFetch) | Scans tool output for prompt injection patterns before it reaches Claude's context |
 | `canary_guard` | PreToolUse | Trip-wire detection — blocks any access to `SECURITY_CANARY` files |
+| `file_lock` | PreToolUse (Edit/Write) | Prevents concurrent agent edits to the same file — acquires PID-based lock, warns if held by another agent, auto-expires after 60s |
+| `file_unlock` | PostToolUse (Edit/Write) | Releases file lock after edit completes — only releases if current process owns the lock |
 
 ### Ops Automation
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 #!/usr/bin/env python3
 """PostToolUse hook: release file lock after Edit/Write completes."""
 import json

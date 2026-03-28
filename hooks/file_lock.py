@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
 #!/usr/bin/env python3
 """PreToolUse hook: file lock — prevents two agents from editing the same file simultaneously.
 
