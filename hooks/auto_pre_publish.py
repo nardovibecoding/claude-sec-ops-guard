@@ -69,6 +69,9 @@ def action(tool_name: str, tool_input: dict, input_data: dict) -> dict:
                     if match in ("0.0.0.0", "127.0.0.1", "255.255.255.255", "192.168.0.1") or \
                        match.startswith(("10.0.", "10.255.", "127.0.", "172.16.", "172.31.", "192.168.", "169.254.", "224.0.")):
                         continue
+                    # Skip browser version numbers (e.g. Chrome/131.0.0.0 in User-Agent strings)
+                    if match.endswith(".0.0.0"):
+                        continue
                 # Skip regex patterns (contain .*, \s, \b, etc.) — these are detection code, not secrets
                 if any(c in match for c in (".*", "\\s", "\\b", "\\d", "[", "+")):
                     continue
