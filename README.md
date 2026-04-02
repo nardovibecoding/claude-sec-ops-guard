@@ -10,7 +10,7 @@ claude plugins install nardovibecoding/claude-sec-ops-guard
 
 **27 hooks + 28 MCP tools — security enforcement, opsec scanning, and ops automation for Claude Code.**
 
-[![hooks](https://img.shields.io/badge/hooks-27-orange?style=for-the-badge)](hooks/)
+[![hooks](https://img.shields.io/badge/hooks-39-orange?style=for-the-badge)](hooks/)
 [![mcp-tools](https://img.shields.io/badge/mcp--tools-28-blue?style=for-the-badge)](mcp/)
 [![license](https://img.shields.io/badge/license-AGPL--3.0-red?style=for-the-badge)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-macOS%20%2B%20Linux-lightgrey?style=for-the-badge)](#)
