@@ -24,19 +24,41 @@ _DEP_VALUE_LOG = "/tmp/dep_value_grep.log"
 
 # Files in sync_public_repos.py SYNC_MAP → which public repos they sync to
 _CROSS_REPO_MAP = {
-    "guard_safety.py":           ["claude-sec-ops-guard", "claude-skills-curation"],
-    "async_safety_guard.py":     ["claude-quality-gate"],
-    "auto_copyright_header.py":  ["claude-sec-ops-guard", "claude-quality-gate"],
-    "auto_license.py":           ["claude-sec-ops-guard", "claude-quality-gate"],
-    "auto_repo_check.py":        ["claude-sec-ops-guard"],
-    "auto_review_before_done.py":["claude-quality-gate"],
-    "auto_test_after_edit.py":   ["claude-quality-gate"],
-    "resource_leak_guard.py":    ["claude-quality-gate"],
-    "hardcoded_model_guard.py":  ["claude-quality-gate"],
-    "tg_security_guard.py":      ["claude-quality-gate"],
-    "admin_only_guard.py":       ["claude-quality-gate"],
-    "hook_base.py":              ["claude-sec-ops-guard", "claude-quality-gate", "claude-skills-curation"],
-    "tweet_stats.py":            ["claude-social-pipeline"],
+    # claude-sec-ops-guard + others
+    "guard_safety.py":            ["claude-sec-ops-guard", "claude-skills-curation"],
+    "hook_base.py":               ["claude-sec-ops-guard", "claude-quality-gate", "claude-skills-curation"],
+    "test_helpers.py":            ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_copyright_header.py":   ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_license.py":            ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_repo_check.py":         ["claude-sec-ops-guard"],
+    "auto_pre_publish.py":        ["claude-sec-ops-guard"],
+    "auto_hook_deploy.py":        ["claude-sec-ops-guard"],
+    "auto_skill_sync.py":         ["claude-sec-ops-guard", "claude-skills-curation"],
+    "auto_dependency_grep.py":    ["claude-sec-ops-guard", "claude-skills-curation"],
+    "auto_test_after_edit.py":    ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_review_before_done.py": ["claude-sec-ops-guard", "claude-quality-gate"],
+    "verify_infra.py":            ["claude-sec-ops-guard"],
+    "pre_commit_validate.py":     ["claude-sec-ops-guard", "claude-quality-gate"],
+    "reasoning_leak_canary.py":   ["claude-sec-ops-guard"],
+    "skill_disable_not_delete.py":["claude-sec-ops-guard"],
+    "unicode_grep_warn.py":       ["claude-sec-ops-guard", "claude-quality-gate"],
+    # claude-quality-gate only
+    "async_safety_guard.py":      ["claude-quality-gate"],
+    "resource_leak_guard.py":     ["claude-quality-gate"],
+    "hardcoded_model_guard.py":   ["claude-quality-gate"],
+    "tg_security_guard.py":       ["claude-quality-gate"],
+    "tg_api_guard.py":            ["claude-quality-gate"],
+    "admin_only_guard.py":        ["claude-quality-gate"],
+    "temp_file_guard.py":         ["claude-quality-gate"],
+    # claude-skills-curation
+    "auto_vps_sync.py":           ["claude-skills-curation"],
+    "auto_memory_index.py":       ["claude-skills-curation"],
+    "auto_pip_install.py":        ["claude-skills-curation"],
+    "auto_content_remind.py":     ["claude-skills-curation"],
+    "auto_restart_process.py":    ["claude-skills-curation"],
+    "auto_bot_restart.py":        ["claude-skills-curation"],
+    # claude-social-pipeline
+    "tweet_stats.py":             ["claude-social-pipeline"],
 }
 
 # Source-of-truth files → downstream files that may need updating
