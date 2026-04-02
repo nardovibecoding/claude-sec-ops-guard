@@ -2,16 +2,17 @@
 # Copyright (c) 2026 Nardo (<github-user>). AGPL-3.0 — see LICENSE
 """PostToolUse hook: dependency tracking for file moves AND content edits.
 
-Two modes:
+Four modes:
 1. Bash mv/rm/git rm → grep for references to the moved/deleted file
-2. Edit/Write on source-of-truth files → warn about downstream files
-
-The dependency map is the single source of truth for what depends on what.
+2. Edit/Write on source-of-truth files → warn about downstream files (blocking)
+3. Edit/Write any file → auto constant-value grep, log to /tmp/dep_value_grep.log (non-blocking)
+4. Edit/Write public-repo files → warn about cross-repo propagation (blocking)
 """
 import json
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -19,6 +20,24 @@ from hook_base import run_hook
 
 _HOME = str(Path.home())
 _PROJECT = Path.home() / "telegram-claude-bot"
+_DEP_VALUE_LOG = "/tmp/dep_value_grep.log"
+
+# Files in sync_public_repos.py SYNC_MAP → which public repos they sync to
+_CROSS_REPO_MAP = {
+    "guard_safety.py":           ["claude-sec-ops-guard", "claude-skills-curation"],
+    "async_safety_guard.py":     ["claude-quality-gate"],
+    "auto_copyright_header.py":  ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_license.py":           ["claude-sec-ops-guard", "claude-quality-gate"],
+    "auto_repo_check.py":        ["claude-sec-ops-guard"],
+    "auto_review_before_done.py":["claude-quality-gate"],
+    "auto_test_after_edit.py":   ["claude-quality-gate"],
+    "resource_leak_guard.py":    ["claude-quality-gate"],
+    "hardcoded_model_guard.py":  ["claude-quality-gate"],
+    "tg_security_guard.py":      ["claude-quality-gate"],
+    "admin_only_guard.py":       ["claude-quality-gate"],
+    "hook_base.py":              ["claude-sec-ops-guard", "claude-quality-gate", "claude-skills-curation"],
+    "tweet_stats.py":            ["claude-social-pipeline"],
+}
 
 # Source-of-truth files → downstream files that may need updating
 # When a source file is edited, warn about its dependents
@@ -95,16 +114,6 @@ _DEPENDENCY_MAP = {
     ".gitignore": [
         "memory/reference_api_keys_locations.md",
     ],
-    # Public repo sync — hooks that publish to claude-security-guard
-    "guard_safety.py": [
-        "PUBLIC: claude-security-guard — run sync_public_repos.py",
-    ],
-    "auto_test_after_edit.py": [
-        "PUBLIC: claude-security-guard — run sync_public_repos.py",
-    ],
-    "auto_review_before_done.py": [
-        "PUBLIC: claude-security-guard — run sync_public_repos.py",
-    ],
     # Digest routing — changing chat_id/thread_id affects config.py + memory
     "youtube_digest.py": [
         "admin_bot/config.py (PERSONAL_THREADS — remove old thread if moved)",
@@ -123,14 +132,54 @@ _DEPENDENCY_MAP = {
 }
 
 
+def _value_grep_log(fname: str, content: str) -> None:
+    """Mode 3: Extract Telegram IDs and thread constants, grep project, log hits."""
+    try:
+        values = set()
+        # Telegram group/channel IDs (negative 13-digit numbers)
+        values.update(re.findall(r'-100\d{10,13}', content))
+        # Thread/topic ID assignments: THREAD_ID = 123, YOUTUBE_THREAD = 156, etc.
+        for m in re.finditer(
+            r'(?:THREAD|TOPIC|GROUP_ID|CHAT_ID|FORUM)[_A-Z0-9]*\s*=\s*(-?\d+)',
+            content
+        ):
+            values.add(m.group(1))
+        if not values:
+            return
+        search_dirs = [
+            str(Path.home() / "telegram-claude-bot"),
+            str(Path.home() / ".claude" / "hooks"),
+        ]
+        ts = datetime.now().strftime("%H:%M")
+        for val in sorted(values):
+            hits = []
+            for d in search_dirs:
+                try:
+                    r = subprocess.run(
+                        ["grep", "-rl", val, d,
+                         "--include=*.py", "--include=*.json"],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    hits.extend(r.stdout.strip().splitlines())
+                except Exception:
+                    pass
+            # Only log if value appears in 2+ distinct files
+            unique = sorted(set(hits))
+            if len(unique) >= 2:
+                files_str = ", ".join(unique[:8])
+                with open(_DEP_VALUE_LOG, "a") as f:
+                    f.write(f"[{ts}] {fname}: {val} → {files_str}\n")
+    except Exception:
+        pass  # never break the hook
+
+
 def check(tool_name, tool_input, _input_data):
     if tool_name == "Bash":
         cmd = tool_input.get("command", "")
         return bool(re.search(r"\b(mv|rm|git\s+rm)\b", cmd))
     if tool_name in ("Edit", "Write"):
         fp = tool_input.get("file_path", "")
-        fname = Path(fp).name if fp else ""
-        return fname in _DEPENDENCY_MAP
+        return bool(fp)  # always fire — action() decides what to return
     return False
 
 
@@ -179,18 +228,34 @@ def action(tool_name, tool_input, _input_data):
             )
         return None
 
-    # Mode 2: Edit/Write on source-of-truth file — warn about deps
+    # Modes 2, 3, 4: Edit/Write
     if tool_name in ("Edit", "Write"):
         fp = tool_input.get("file_path", "")
         fname = Path(fp).name if fp else ""
+
+        # Mode 3: always run value-grep as non-blocking side-effect
+        new_content = tool_input.get("new_string", "") or tool_input.get("content", "")
+        _value_grep_log(fname, new_content)
+
+        msgs = []
+
+        # Mode 2: source-of-truth dependency map (blocking)
         deps = _DEPENDENCY_MAP.get(fname)
-        if not deps:
-            return None
-        dep_list = "\n".join(f"  - {d}" for d in deps)
-        return (
-            f"DEPENDENCY: `{fname}` is a source-of-truth file. "
-            f"Check these for stale references:\n{dep_list}"
-        )
+        if deps:
+            dep_list = "\n".join(f"  - {d}" for d in deps)
+            msgs.append(
+                f"DEPENDENCY: `{fname}` is a source-of-truth file. "
+                f"Check these for stale references:\n{dep_list}"
+            )
+
+        # Mode 4: cross-repo sync warning (blocking)
+        repos = _CROSS_REPO_MAP.get(fname)
+        if repos:
+            msgs.append(
+                f"CROSS-REPO: `{fname}` → {', '.join(repos)} — will sync on next push"
+            )
+
+        return "\n\n".join(msgs) if msgs else None
 
     return None
 
