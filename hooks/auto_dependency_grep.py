@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nardo (<github-user>). AGPL-3.0 — see LICENSE
 """PostToolUse hook: dependency tracking for file moves AND content edits.
 
 Two modes:
@@ -104,6 +105,15 @@ _DEPENDENCY_MAP = {
     "auto_review_before_done.py": [
         "PUBLIC: claude-security-guard — run sync_public_repos.py",
     ],
+    # Digest routing — changing chat_id/thread_id affects config.py + memory
+    "youtube_digest.py": [
+        "admin_bot/config.py (PERSONAL_THREADS — remove old thread if moved)",
+        "memory/project_ai_digest.md",
+    ],
+    "podcast_digest.py": [
+        "admin_bot/config.py (PERSONAL_THREADS — remove old thread if moved)",
+        "memory/project_ai_digest.md",
+    ],
     # Content — never hardcode repo stats in memory/tweets
     "sync_public_repos.py": [
         "memory/reference_github_repos.md (don't hardcode counts)",
@@ -160,9 +170,11 @@ def action(tool_name, tool_input, _input_data):
 
         if refs:
             ref_list = "\n".join(f"  - {r}" for r in refs[:10])
+            n = len(refs)
+            tier = "CRITICAL" if n >= 10 else "HIGH" if n >= 4 else "LOW"
             return (
-                f"File `{basename}` is referenced in "
-                f"{len(refs)} files:\n{ref_list}\n"
+                f"[{tier}] File `{basename}` is referenced in "
+                f"{n} files:\n{ref_list}\n"
                 f"Check these before proceeding."
             )
         return None
