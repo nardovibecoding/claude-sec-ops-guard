@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nardo (nardovibecoding). AGPL-3.0 — see LICENSE
+# Copyright (c) 2026 Nardo (<github-user>). AGPL-3.0 — see LICENSE
 """Tests for auto_skill_sync.py — stdlib unittest only."""
 import sys
 import unittest
@@ -30,17 +30,17 @@ class TestCheck(unittest.TestCase):
 
 class TestSanitize(unittest.TestCase):
     def test_strips_private_home_path(self):
-        result = app._sanitize("path: /Users/bernard/foo")
-        self.assertNotIn("/Users/bernard/", result)
+        result = app._sanitize("path: ~/foo")
+        self.assertNotIn("~/", result)
         self.assertIn("~/foo", result)
 
     def test_strips_telegram_bot_path(self):
-        result = app._sanitize("read /Users/bernard/telegram-claude-bot/CLAUDE.md")
+        result = app._sanitize("read ~/telegram-claude-bot/CLAUDE.md")
         self.assertNotIn("telegram-claude-bot", result)
 
     def test_strips_vps_ip(self):
-        result = app._sanitize("bernard@157.180.28.14")
-        self.assertNotIn("157.180.28.14", result)
+        result = app._sanitize("<user>@<vps-ip>")
+        self.assertNotIn("<vps-ip>", result)
 
     def test_strips_specific_memory_path(self):
         result = app._sanitize("~/.claude/projects/-Users-bernard/memory/MEMORY.md")
@@ -81,7 +81,7 @@ class TestAction(unittest.TestCase):
             src_dir = Path(tmp) / "skills" / "md-cleanup"
             src_dir.mkdir(parents=True)
             src = src_dir / "SKILL.md.disabled"
-            src.write_text("# MD Cleanup\npath: /Users/bernard/foo")
+            src.write_text("# MD Cleanup\npath: ~/foo")
 
             # Public repo
             pub_dir = Path(tmp) / "public" / "maintenance" / "md-cleanup"
@@ -96,7 +96,7 @@ class TestAction(unittest.TestCase):
 
             # Content was sanitized and written
             written = pub_md.read_text()
-            self.assertNotIn("/Users/bernard/", written)
+            self.assertNotIn("~/", written)
             self.assertIn("synced", result)
 
     def test_private_skill_returns_vps_reminder(self):
