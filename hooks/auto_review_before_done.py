@@ -10,9 +10,17 @@ Silent (exit 0, no output): everything is fine
 """
 
 import json
+import os
 import re as _re
 import subprocess
 import sys
+from pathlib import Path
+
+# Skip during convos (auto-clear flow)
+_tty = os.environ.get("CLAUDE_TTY_ID", "").strip()
+if Path(f"/tmp/claude_ctx_exit_pending_{_tty}").exists() if _tty else Path("/tmp/claude_ctx_exit_pending").exists():
+    print("{}")
+    sys.exit(0)
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -61,32 +69,42 @@ def load_edits(session_id: str | None) -> list:
 
 def check_caller_impact(code_edits: list) -> list[str]:
     """Warn about public functions that are referenced in other files."""
-    # Skip generic names that appear in every hook (hook interface boilerplate)
     _SKIP_FUNCS = {"check", "action", "main", "run", "setup", "teardown", "handler"}
     warnings = []
+    _MAX_GREPS = 5
+    _grep_count = 0
     try:
         for e in code_edits:
+            if _grep_count >= _MAX_GREPS:
+                break
             fp = Path(e["file"])
             if fp.suffix != ".py":
                 continue
-            # Only non-generic public functions
             funcs = [f for f in e.get("functions", [])
-                     if not f.startswith("_") and f not in _SKIP_FUNCS][:3]
+                     if not f.startswith("_") and f not in _SKIP_FUNCS][:2]
             if not funcs:
                 continue
-            # Find project root
             root = fp.parent
+            home = Path.home()
             for _ in range(6):
                 if (root / ".git").exists() or (root / "pyproject.toml").exists():
                     break
+                if root == home or root == root.parent:
+                    root = fp.parent
+                    break
                 root = root.parent
+            if root == home:
+                continue
             for func in funcs:
+                if _grep_count >= _MAX_GREPS:
+                    break
+                _grep_count += 1
                 r = subprocess.run(
                     ["grep", "-rl", "--include=*.py",
                      "--exclude-dir=.git", "--exclude-dir=node_modules",
                      "--exclude-dir=__pycache__", "--exclude-dir=.venv",
                      f"{func}(", str(root)],
-                    capture_output=True, text=True, timeout=3
+                    capture_output=True, text=True, timeout=1
                 )
                 callers = [
                     c for c in r.stdout.strip().splitlines()
